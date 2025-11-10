@@ -21,7 +21,7 @@ let gameStartTime = 0; // Track when game started for timer
 function preload() {
   potImage = loadImage('img/POT.svg');
   stemImage = loadImage('img/stem.svg');
-  backgroundImage = loadImage('img/background.png');
+  backgroundImage = loadImage('img/background.jpg');
   flowerImages[0] = loadImage('img/sunflower.svg');
   flowerImages[1] = loadImage('img/pinkflower.svg');
   flowerImages[2] = loadImage('img/blueflower.svg');
@@ -68,8 +68,8 @@ function draw() {
     background(220, 245, 255);
   }
   
-  // Black overlay at 5% opacity
-  fill(0, 0, 0, 30); // 5% opacity (0.05 * 255 ≈ 13)
+  // White overlay at 5% opacity
+  fill(30, 80, 180, 43); // Blue at 5% opacity (0.05 * 255 ≈ 13)
   noStroke();
   rect(0, 0, width, height);
   
@@ -113,9 +113,6 @@ function draw() {
   
   // Draw watering can
   drawCan(mouseX, mouseY);
-  
-  // Draw text banner at bottom
-  drawTextBanner(fullyGrownCount);
 }
 
 function drawTextBanner(flowerCount) {
@@ -270,11 +267,31 @@ class Plant {
     
     // Draw stem - fixed size, top attached to flower center
     if (this.growth > 0) {
-      // Position stem so top aligns with flower center
-      // The stem extends downward from flowerCenterY
-      // The pot (drawn later) will cover the part below stemStartY
-      imageMode(CORNER);
-      image(stemImage, -fixedStemDisplayWidth / 2, flowerCenterY, fixedStemDisplayWidth, fixedStemDisplayHeight);
+      // Pot bottom is at y = 5 + 35 = 40 (pot center + half height)
+      let potBottomY = 40;
+      
+      // Calculate how much of the stem should be visible (above pot bottom)
+      let stemBottomY = flowerCenterY + fixedStemDisplayHeight;
+      let visibleStemHeight = fixedStemDisplayHeight;
+      
+      if (stemBottomY > potBottomY) {
+        // Stem extends below pot, clip it
+        visibleStemHeight = potBottomY - flowerCenterY;
+        
+        // Calculate what portion of the source image to show
+        let sourceRatio = visibleStemHeight / fixedStemDisplayHeight;
+        let sourceHeight = stemSVGHeight * sourceRatio;
+        
+        // Draw only the visible portion using image cropping
+        imageMode(CORNER);
+        image(stemImage, 
+              -fixedStemDisplayWidth / 2, flowerCenterY, fixedStemDisplayWidth, visibleStemHeight,
+              0, 0, stemSVGWidth, sourceHeight);
+      } else {
+        // Stem fits entirely above pot bottom, draw normally
+        imageMode(CORNER);
+        image(stemImage, -fixedStemDisplayWidth / 2, flowerCenterY, fixedStemDisplayWidth, fixedStemDisplayHeight);
+      }
       imageMode(CENTER); // Reset to CENTER for flower
     }
     
@@ -299,6 +316,7 @@ class Plant {
         flowerWidth = baseSize * aspectRatio;
       }
       
+      // Draw flower
       imageMode(CENTER);
       image(this.flowerImage, 0, flowerCenterY, flowerWidth, flowerHeight);
     }
@@ -307,6 +325,13 @@ class Plant {
     imageMode(CENTER);
     let potWidth = 70;
     let potHeight = 70;
+    
+    // Add drop shadow for pot - draw darkened version offset
+    tint(0, 0, 0, 100); // Dark shadow with transparency
+    image(potImage, 2, 8, potWidth, potHeight);
+    noTint(); // Reset tint
+    
+    // Draw actual pot on top
     image(potImage, 0, 5, potWidth, potHeight);
     
     imageMode(CORNER);
