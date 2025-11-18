@@ -17,6 +17,19 @@ let flowerImages = [];
 
 let canRotation = 0; // Current rotation angle of the watering can
 let gameStartTime = 0; // Track when game started for timer
+let backgroundAudio;
+let backgroundAudioStarted = false;
+let twinkleAudioClips = [];
+let waterAudio;
+let waterAudioPlaying = false;
+let waterVolumeTarget = 0;
+let waterVolumeLevel = 0;
+const waterFadeSpeed = 0.02;
+const flowerTwinklePaths = [
+  './garden-sfx/twinkle.mp3',
+  './garden-sfx/twinkle-1.mp3',
+  './garden-sfx/twinkle-2.mp3'
+];
 
 function preload() {
   potImage = loadImage('img/POT.svg');
@@ -31,6 +44,17 @@ function setup() {
   createCanvas(1200, 600);
   pixelDensity(2); // Increase pixel density for sharper SVG rendering
   gameStartTime = millis(); // Initialize game timer
+  backgroundAudio = new Audio('./garden-sfx/background.mp3');
+  backgroundAudio.loop = true;
+  backgroundAudio.volume = 0.35;
+  waterAudio = new Audio('./garden-sfx/water.mp3');
+  waterAudio.loop = true;
+  waterAudio.volume = 0;
+  twinkleAudioClips = flowerTwinklePaths.map((path) => {
+    const clip = new Audio(path);
+    clip.volume = 0.7;
+    return clip;
+  });
   spacingX = width / (cols + 1);
   spacingY = height / (rows + 1) + 25;
   
@@ -110,9 +134,110 @@ function draw() {
       droplets.splice(i, 1);
     }
   }
+  updateWaterAudio(isWatering);
+  processWaterAudioFade();
   
   // Draw watering can
   drawCan(mouseX, mouseY);
+}
+
+function ensureBackgroundAudio() {
+  console.log('[audio] ensureBackgroundAudio called', { started: backgroundAudioStarted });
+  if (backgroundAudio && !backgroundAudioStarted) {
+    let playPromise = backgroundAudio.play();
+    if (playPromise && typeof playPromise.then === 'function') {
+      playPromise
+        .then(() => {
+          console.log('[audio] backgroundAudio played successfully');
+          backgroundAudioStarted = true;
+        })
+        .catch((err) => {
+          console.warn('[audio] backgroundAudio play failed', err);
+          backgroundAudioStarted = false;
+        });
+    } else {
+      console.log('[audio] backgroundAudio play treated as sync success');
+      backgroundAudioStarted = true;
+    }
+  }
+}
+
+function playTwinkleSound(flowerIndex) {
+  if (!twinkleAudioClips.length) {
+    return;
+  }
+
+  const sourceIndex = flowerIndex % twinkleAudioClips.length;
+  const clip = twinkleAudioClips[sourceIndex];
+  if (!clip) {
+    return;
+  }
+
+  let instance = clip.cloneNode(true);
+  console.log('[audio] playing twinkle sound');
+  instance.play().catch(() => {});
+}
+
+function updateWaterAudio(isWatering) {
+  if (!waterAudio) {
+    return;
+  }
+
+  waterVolumeTarget = isWatering ? 0.55 : 0;
+
+  if (isWatering && !waterAudioPlaying) {
+    ensureBackgroundAudio();
+    waterVolumeLevel = 0;
+    waterAudio.volume = 0;
+    let playPromise = waterAudio.play();
+    if (playPromise && typeof playPromise.then === 'function') {
+      playPromise
+        .then(() => {
+          waterAudioPlaying = true;
+        })
+        .catch(() => {
+          waterAudioPlaying = false;
+        });
+    } else {
+      waterAudioPlaying = true;
+    }
+  }
+}
+
+function processWaterAudioFade() {
+  if (!waterAudio || (!waterAudioPlaying && waterVolumeLevel === 0 && waterVolumeTarget === 0)) {
+    return;
+  }
+
+  if (Math.abs(waterVolumeLevel - waterVolumeTarget) <= waterFadeSpeed) {
+    waterVolumeLevel = waterVolumeTarget;
+  } else if (waterVolumeLevel < waterVolumeTarget) {
+    waterVolumeLevel += waterFadeSpeed;
+  } else {
+    waterVolumeLevel -= waterFadeSpeed;
+  }
+
+  waterVolumeLevel = constrain(waterVolumeLevel, 0, 0.55);
+  waterAudio.volume = waterVolumeLevel;
+
+  if (waterVolumeTarget === 0 && waterAudioPlaying && waterVolumeLevel === 0) {
+    waterAudio.pause();
+    waterAudio.currentTime = 0;
+    waterAudioPlaying = false;
+  }
+}
+
+function mouseMoved() {
+  ensureBackgroundAudio();
+}
+
+function mousePressed() {
+  ensureBackgroundAudio();
+}
+
+function touchStarted() {
+  ensureBackgroundAudio();
+  return false;
 }
 
 function drawTextBanner(flowerCount) {
@@ -217,6 +342,7 @@ class Plant {
     this.watering = false;
     this.growth = 0;
     this.startTime = 0;
+    this.twinklePlayed = false;
     // Assign flower type based on position for spread-out distribution
     // Use a pattern that creates variety: (row * 2 + col) % 3
     this.flowerIndex = (row * 2 + col) % flowerImages.length;
@@ -236,9 +362,14 @@ class Plant {
         this.watering = true;
         this.startTime = millis();
         this.growth = 0; // Reset growth when watering restarts
+        this.twinklePlayed = false;
       }
       // Growth increases while watering
       this.growth = constrain((millis() - this.startTime) / growTime, 0, 1);
+      if (this.growth >= 1 && !this.twinklePlayed) {
+        playTwinkleSound(this.flowerIndex);
+        this.twinklePlayed = true;
+      }
     } else {
       this.watering = false;
     }
