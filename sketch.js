@@ -115,7 +115,7 @@ function draw() {
         // Emit droplets if watering
         if (random(1) < 0.3) {
           let spoutPos = getSpoutPosition(mouseX, mouseY);
-          droplets.push(new Droplet(spoutPos.x, spoutPos.y));
+          droplets.push(new Droplet(spoutPos.x, spoutPos.y, plants[r][c]));
         }
       }
     }
@@ -130,7 +130,7 @@ function draw() {
     let d = droplets[i];
     d.update();
     d.display();
-    if (d.isOffscreen()) {
+    if (d.shouldRemove()) {
       droplets.splice(i, 1);
     }
   }
@@ -472,15 +472,28 @@ class Plant {
 
 // ----------------- Droplet class -----------------
 class Droplet {
-  constructor(x, y) {
+  constructor(x, y, plant) {
     this.x = x + random(-8, 8);
     this.y = y + random(-8, 8);
     this.speed = random(4, 8);
     this.len = random(8, 15);
+    this.done = false;
+    if (plant) {
+      this.targetY = plant.y - 30;
+    } else {
+      this.targetY = height + this.len;
+    }
   }
   
   update() {
+    if (this.done) {
+      return;
+    }
     this.y += this.speed;
+    if (this.y + this.len >= this.targetY) {
+      this.y = this.targetY - this.len;
+      this.done = true;
+    }
   }
   
   display() {
@@ -489,7 +502,7 @@ class Droplet {
     line(this.x, this.y, this.x, this.y + this.len);
   }
   
-  isOffscreen() {
-    return this.y > mouseY + 75;
+  shouldRemove() {
+    return this.done || this.y > height + this.len;
   }
 }
